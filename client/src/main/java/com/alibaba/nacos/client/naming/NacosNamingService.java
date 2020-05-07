@@ -76,8 +76,9 @@ public class NacosNamingService implements NamingService {
 
     public NacosNamingService(String serverList) {
         Properties properties = new Properties();
+        // 设置Nacos服务节点集群属性
         properties.setProperty(PropertyKeyConst.SERVER_ADDR, serverList);
-
+        // 初始化NacosNamingService
         init(properties);
     }
 
@@ -86,24 +87,37 @@ public class NacosNamingService implements NamingService {
     }
 
     private void init(Properties properties) {
+        // 解析当前service的namespace
         namespace = InitUtils.initNamespaceForNaming(properties);
+        // 初始化Nacos服务节点的域名地址
         initServerAddr(properties);
         InitUtils.initWebRootContext();
+        // NamingService的文件缓存地址
         initCacheDir();
+        // 初始化日志对象
         initLogName(properties);
-
+        // 创建事件驱动器
         eventDispatcher = new EventDispatcher();
+        // 创建一个命名服务的代理
         serverProxy = new NamingProxy(namespace, endpoint, serverList, properties);
+        // 利用命名服务的代理创建对应的心跳响应
         beatReactor = new BeatReactor(serverProxy, initClientBeatThreadCount(properties));
+        // 创建一个Host响应
         hostReactor = new HostReactor(eventDispatcher, serverProxy, cacheDir, isLoadCacheAtStart(properties),
             initPollingThreadCount(properties));
     }
 
+    /**
+     * 获取客户端心跳线程数量
+     * @param properties
+     * @return
+     */
     private int initClientBeatThreadCount(Properties properties) {
+        // 默认按照处理器多线程/2来算，最少为1
         if (properties == null) {
             return UtilAndComs.DEFAULT_CLIENT_BEAT_THREAD_COUNT;
         }
-
+        // 否则使用设置的线程数量
         return NumberUtils.toInt(properties.getProperty(PropertyKeyConst.NAMING_CLIENT_BEAT_THREAD_COUNT),
             UtilAndComs.DEFAULT_CLIENT_BEAT_THREAD_COUNT);
     }
@@ -128,7 +142,12 @@ public class NacosNamingService implements NamingService {
         return loadCacheAtStart;
     }
 
+    /**
+     * 处实行后
+     * @param properties
+     */
     private void initServerAddr(Properties properties) {
+        // 获取配置中配置的server_addr nacos服务节点列表
         serverList = properties.getProperty(PropertyKeyConst.SERVER_ADDR);
         endpoint = InitUtils.initEndpoint(properties);
         if (StringUtils.isNotEmpty(endpoint)) {
@@ -189,7 +208,7 @@ public class NacosNamingService implements NamingService {
 
     @Override
     public void registerInstance(String serviceName, String groupName, Instance instance) throws NacosException {
-
+        // 如果是临时节点，也就是我们需要注册的服务节点，则需要客户端自己负责心跳上报
         if (instance.isEphemeral()) {
             BeatInfo beatInfo = new BeatInfo();
             beatInfo.setServiceName(NamingUtils.getGroupedName(serviceName, groupName));
@@ -200,10 +219,10 @@ public class NacosNamingService implements NamingService {
             beatInfo.setMetadata(instance.getMetadata());
             beatInfo.setScheduled(false);
             beatInfo.setPeriod(instance.getInstanceHeartBeatInterval());
-
+            // 添加心跳任务
             beatReactor.addBeatInfo(NamingUtils.getGroupedName(serviceName, groupName), beatInfo);
         }
-
+        // 通过NamingProxy向Nacos服务端发起注册请求
         serverProxy.registerService(NamingUtils.getGroupedName(serviceName, groupName), groupName, instance);
     }
 
@@ -475,6 +494,7 @@ public class NacosNamingService implements NamingService {
         }
 
         Iterator<Instance> iterator = list.iterator();
+        // 判断服务器的状态
         while (iterator.hasNext()) {
             Instance instance = iterator.next();
             if (healthy != instance.isHealthy() || !instance.isEnabled() || instance.getWeight() <= 0) {

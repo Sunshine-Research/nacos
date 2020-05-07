@@ -34,6 +34,7 @@ import java.util.concurrent.*;
 import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
 
 /**
+ * 处理故障转移的对象
  * @author nkorange
  */
 public class FailoverReactor {
@@ -63,12 +64,12 @@ public class FailoverReactor {
     private static final long DAY_PERIOD_MINUTES = 24 * 60;
 
     public void init() {
-
+        // 用于切换刷新写入文件的任务调度
         executorService.scheduleWithFixedDelay(new SwitchRefresher(), 0L, 5000L, TimeUnit.MILLISECONDS);
-
+        // 用于每日统计的写文件的任务调度
         executorService.scheduleWithFixedDelay(new DiskFileWriter(), 30, DAY_PERIOD_MINUTES, TimeUnit.MINUTES);
 
-        // backup file on startup if failover directory is empty.
+        // 后备目录和日志文件的任务调度
         executorService.schedule(new Runnable() {
             @Override
             public void run() {

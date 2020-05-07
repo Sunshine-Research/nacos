@@ -119,8 +119,13 @@ public class SystemUtils {
         return NACOS_HOME + File.separator + "conf" + File.separator + "cluster.conf";
     }
 
+    /**
+     * @return 读取的Nacos集群配置
+     * @throws IOException 出现IO异常
+     */
     public static List<String> readClusterConf() throws IOException {
         List<String> instanceList = new ArrayList<String>();
+        // 读取nacos/conf/cluster.conf文件
         try(Reader reader = new InputStreamReader(new FileInputStream(new File(CLUSTER_CONF_FILE_PATH)),
         StandardCharsets.UTF_8)) {
             List<String> lines = IoUtils.readLines(reader);
@@ -128,20 +133,22 @@ public class SystemUtils {
             for (String line : lines) {
                 String instance = line.trim();
                 if (instance.startsWith(comment)) {
-                    // # it is ip
+                    // 如果IP被注释，则不进行读取
                     continue;
                 }
+                // 如果该行中间部位使用了"#"进行注释，则把前半部分截取出来
                 if (instance.contains(comment)) {
-                    // 192.168.71.52:8848 # Instance A
+                    // 192.168.71.52:8848
                     instance = instance.substring(0, instance.indexOf(comment));
                     instance = instance.trim();
                 }
+                // 如果该行使用了","作为分隔符
                 int multiIndex = instance.indexOf(Constants.COMMA_DIVISION);
                 if (multiIndex > 0) {
-                    // support the format: ip1:port,ip2:port  # multi inline
+                    // 支持的格式: ip1:port,ip2:port
                     instanceList.addAll(Arrays.asList(instance.split(Constants.COMMA_DIVISION)));
                 } else {
-                    //support the format: 192.168.71.52:8848
+                    // 支持的格式: 192.168.71.52:8848
                     instanceList.add(instance);
                 }
             }

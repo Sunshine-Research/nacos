@@ -191,11 +191,18 @@ public class NamingProxy {
         }
     }
 
+    /**
+     * Nacos客户端进行服务注册
+     * @param serviceName 注册的服务名称
+     * @param groupName   服务所在的集群名称
+     * @param instance    注册的服务实例
+     * @throws NacosException
+     */
     public void registerService(String serviceName, String groupName, Instance instance) throws NacosException {
 
         NAMING_LOGGER.info("[REGISTER-SERVICE] {} registering service {} with instance: {}",
             namespaceId, serviceName, instance);
-
+        // 服务注册请求参数
         final Map<String, String> params = new HashMap<String, String>(9);
         params.put(CommonParams.NAMESPACE_ID, namespaceId);
         params.put(CommonParams.SERVICE_NAME, serviceName);
@@ -208,7 +215,7 @@ public class NamingProxy {
         params.put("healthy", String.valueOf(instance.isHealthy()));
         params.put("ephemeral", String.valueOf(instance.isEphemeral()));
         params.put("metadata", JSON.toJSONString(instance.getMetadata()));
-
+        // 发起HTTP请求，请求方法：/nacos/v1/ns/instance
         reqAPI(UtilAndComs.NACOS_URL_INSTANCE, params, HttpMethod.POST);
 
     }
@@ -321,12 +328,20 @@ public class NamingProxy {
         return reqAPI(UtilAndComs.NACOS_URL_BASE + "/instance/list", params, HttpMethod.GET);
     }
 
+    /**
+     * 发送心跳请求
+     * @param beatInfo         实例心跳信息
+     * @param lightBeatEnabled 是否是轻量级的心跳响应
+     * @return
+     * @throws NacosException
+     */
     public JSONObject sendBeat(BeatInfo beatInfo, boolean lightBeatEnabled) throws NacosException {
 
         if (NAMING_LOGGER.isDebugEnabled()) {
             NAMING_LOGGER.debug("[BEAT] {} sending beat to server: {}", namespaceId, beatInfo.toString());
         }
         Map<String, String> params = new HashMap<String, String>(8);
+        // 构建心跳请求数据
         String body = StringUtils.EMPTY;
         if (!lightBeatEnabled) {
             try {
@@ -335,12 +350,15 @@ public class NamingProxy {
                 throw new NacosException(NacosException.SERVER_ERROR, "encode beatInfo error", e);
             }
         }
+        // 构建请求参数
         params.put(CommonParams.NAMESPACE_ID, namespaceId);
         params.put(CommonParams.SERVICE_NAME, beatInfo.getServiceName());
         params.put(CommonParams.CLUSTER_NAME, beatInfo.getCluster());
         params.put("ip", beatInfo.getIp());
         params.put("port", String.valueOf(beatInfo.getPort()));
+        // 由NamingProxy发起请求，向所有Nacos的服务节点，请求地址：/nacos/v1/ns/instance/beat
         String result = reqAPI(UtilAndComs.NACOS_URL_BASE + "/instance/beat", params, body, HttpMethod.PUT);
+        // 返回心跳结果
         return JSON.parseObject(result);
     }
 
@@ -413,6 +431,16 @@ public class NamingProxy {
         return callServer(api, params, body, curServer, HttpMethod.GET);
     }
 
+    /**
+     * 构建完整的请求url，并发请求
+     * @param api       请求api
+     * @param params    请求参数
+     * @param body      请求内存
+     * @param curServer 请求的服务器
+     * @param method    请求方法
+     * @return 请求结果
+     * @throws NacosException
+     */
     public String callServer(String api, Map<String, String> params, String body, String curServer, String method)
         throws NacosException {
         long start = System.currentTimeMillis();
@@ -448,7 +476,7 @@ public class NamingProxy {
     }
 
     public String reqAPI(String api, Map<String, String> params, String body, List<String> servers, String method) throws NacosException {
-
+        // 获取namespaceId
         params.put(CommonParams.NAMESPACE_ID, getNamespaceId());
 
         if (CollectionUtils.isEmpty(servers) && StringUtils.isEmpty(nacosDomain)) {
@@ -460,8 +488,10 @@ public class NamingProxy {
         if (servers != null && !servers.isEmpty()) {
 
             Random random = new Random(System.currentTimeMillis());
+            // 避免每次都向同一个顺序的Nacos服务节点发起请求
             int index = random.nextInt(servers.size());
 
+            // 向每个Nacos节点发起请求
             for (int i = 0; i < servers.size(); i++) {
                 String server = servers.get(index);
                 try {

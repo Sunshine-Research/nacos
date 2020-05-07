@@ -38,13 +38,11 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.*;
 
 /**
- * Service of Nacos server side
+ * Nacos服务端的service
  * <p>
- * We introduce a 'service --> cluster --> instance' model, in which service stores a list of clusters,
- * which contain a list of instances.
+ * 我们使用了"service"=>"cluster=>"instance"的模型，也就是service中存储了cluster列表，cluster里面存储了instance列表
  * <p>
- * This class inherits from Service in API module and stores some fields that do not have to expose to client.
- *
+ * 此类继承Service类，并存储一些不必公开给客户端的字段
  * @author nkorange
  */
 public class Service extends com.alibaba.nacos.api.naming.pojo.Service implements Record, RecordListener<Instances> {
@@ -55,7 +53,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
     private ClientBeatCheckTask clientBeatCheckTask = new ClientBeatCheckTask(this);
 
     /**
-     * Identify the information used to determine how many isEmpty judgments the service has experienced
+     * 识别用于确定服务经历过多少isEmpty判断信息
      */
     private int finalizeCount = 0;
 
@@ -102,10 +100,16 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
         this.ipDeleteTimeout = ipDeleteTimeout;
     }
 
+    /**
+     * 处理指定实例的心跳请求
+     * @param rsInfo 实例的心跳请求
+     */
     public void processClientBeat(final RsInfo rsInfo) {
+        // 创建客户端心跳请求任务
         ClientBeatProcessor clientBeatProcessor = new ClientBeatProcessor();
         clientBeatProcessor.setService(this);
         clientBeatProcessor.setRsInfo(rsInfo);
+        // 使用健康检查调度模型调度客户端的心跳请求任务
         HealthCheckReactor.scheduleNow(clientBeatProcessor);
     }
 
@@ -254,11 +258,13 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
     }
 
     public void init() {
-
+        // 开始调度心跳检查任务
         HealthCheckReactor.scheduleCheck(clientBeatCheckTask);
 
         for (Map.Entry<String, Cluster> entry : clusterMap.entrySet()) {
+            // 设定cluster和service的绑定关系
             entry.getValue().setService(this);
+            // 初始化每个绑定的cluster
             entry.getValue().init();
         }
     }
@@ -512,10 +518,15 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
         clusterMap.put(cluster.getName(), cluster);
     }
 
+    /**
+     * 校验新创建的service
+     */
     public void validate() {
+        // service名称是否符合命名规则
         if (!getName().matches(SERVICE_NAME_SYNTAX)) {
             throw new IllegalArgumentException("dom name can only have these characters: 0-9a-zA-Z-._:, current: " + getName());
         }
+        // 校验service中的每个集群
         for (Cluster cluster : clusterMap.values()) {
             cluster.validate();
         }

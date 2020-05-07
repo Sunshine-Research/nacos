@@ -28,6 +28,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * 服务集群
  * @author nkorange
  * @author jifengnan 2019-04-26
  */
@@ -35,7 +36,7 @@ public class Cluster extends com.alibaba.nacos.api.naming.pojo.Cluster implement
 
     private static final String CLUSTER_NAME_SYNTAX = "[0-9a-zA-Z-]+";
     /**
-     * a addition for same site routing, can group multiple sites into a region, like Hangzhou, Shanghai, etc.
+     * 同一个站点的路由附加值，可以将多个站点聚合成为一个区域，比如杭州，上海等
      */
     private String sitegroup = StringUtils.EMPTY;
 
@@ -64,12 +65,11 @@ public class Cluster extends com.alibaba.nacos.api.naming.pojo.Cluster implement
     }
 
     /**
-     * Create a cluster.
-     * <p>the cluster name cannot be null, and only the arabic numerals, letters and endashes are allowed.
-     *
-     * @param clusterName the cluster name
-     * @param service     the service to which the current cluster belongs
-     * @throws IllegalArgumentException the service is null, or the cluster name is null, or the cluster name is illegal
+     * 创建集群
+     * 集群名称不能为null，而且只能是阿拉伯数字，字母
+     * @param clusterName 集群名称
+     * @param service     集群所属的服务
+     * @throws IllegalArgumentException clusterName或service为null，或者clusterName不符合规定
      * @author jifengnan 2019-04-26
      * @since 1.0.1
      */
@@ -102,12 +102,17 @@ public class Cluster extends com.alibaba.nacos.api.naming.pojo.Cluster implement
         return ephemeral ? new ArrayList<>(ephemeralInstances) : new ArrayList<>(persistentInstances);
     }
 
+    /**
+     * 初始化集群
+     */
     public void init() {
+        // 如果已经初始化，直接返回
         if (inited) {
             return;
         }
+        // 构建健康检查任务
         checkTask = new HealthCheckTask(this);
-
+        // 开始调度健康检查任务
         HealthCheckReactor.scheduleCheck(checkTask);
         inited = true;
     }

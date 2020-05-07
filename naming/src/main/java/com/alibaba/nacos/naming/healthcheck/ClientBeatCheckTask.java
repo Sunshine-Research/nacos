@@ -34,8 +34,7 @@ import java.util.List;
 
 
 /**
- * Check and update statues of ephemeral instances, remove them if they have been expired.
- *
+ * 检查和更新临时实例的状态，如果实例节点状态已经过期，则会进行移除
  * @author nkorange
  */
 public class ClientBeatCheckTask implements Runnable {
@@ -72,25 +71,29 @@ public class ClientBeatCheckTask implements Runnable {
     @Override
     public void run() {
         try {
+            // 指定service不是当前Nacos服务节点负责，则不进行任务处理
             if (!getDistroMapper().responsible(service.getName())) {
                 return;
             }
-
+            // 如果关闭了健康检查功能，也不进行任务处理
             if (!getSwitchDomain().isHealthCheckEnabled()) {
                 return;
             }
-
+            // 获取当前service下，所有的实例信息，包括属于集群的部分
             List<Instance> instances = service.allIPs(true);
 
-            // first set health status of instances:
+            // 首先设置所有实例节点的健康状态
             for (Instance instance : instances) {
+                // 如果心跳响应已经超过了要求的心跳时间间隔
                 if (System.currentTimeMillis() - instance.getLastBeat() > instance.getInstanceHeartBeatTimeOut()) {
                     if (!instance.isMarked()) {
                         if (instance.isHealthy()) {
+                            // 将当前节点的健康状态置为false
                             instance.setHealthy(false);
                             Loggers.EVT_LOG.info("{POS} {IP-DISABLED} valid: {}:{}@{}@{}, region: {}, msg: client timeout after {}, last beat: {}",
                                 instance.getIp(), instance.getPort(), instance.getClusterName(), service.getName(),
                                 UtilsAndCommons.LOCALHOST_SITE, instance.getInstanceHeartBeatTimeOut(), instance.getLastBeat());
+                            // 发送给定service变动和实例变动事件
                             getPushService().serviceChanged(service);
                             SpringContext.getAppContext().publishEvent(new InstanceHeartbeatTimeoutEvent(this, instance));
                         }
@@ -98,20 +101,22 @@ public class ClientBeatCheckTask implements Runnable {
                 }
             }
 
+            // 如果全局设置无需关心过期节点，则不对过期节点进行处理
             if (!getGlobalConfig().isExpireInstance()) {
                 return;
             }
 
-            // then remove obsolete instances:
+            // 移除过期节点
             for (Instance instance : instances) {
 
                 if (instance.isMarked()) {
                     continue;
                 }
 
+                // 如果心跳时间间隔已经超出了可以移除的等待时间
                 if (System.currentTimeMillis() - instance.getLastBeat() > instance.getIpDeleteTimeout()) {
-                    // delete instance
                     Loggers.SRV_LOG.info("[AUTO-DELETE-IP] service: {}, ip: {}", service.getName(), JSON.toJSONString(instance));
+                    // 移除此实例
                     deleteIP(instance);
                 }
             }
@@ -122,7 +127,10 @@ public class ClientBeatCheckTask implements Runnable {
 
     }
 
-
+    /**
+     * 移除实例
+     * @param instance 需要移除的实例
+     */
     private void deleteIP(Instance instance) {
 
         try {
@@ -133,11 +141,11 @@ public class ClientBeatCheckTask implements Runnable {
                 .appendParam("clusterName", instance.getClusterName())
                 .appendParam("serviceName", service.getName())
                 .appendParam("namespaceId", service.getNamespaceId());
-
+            // 发送请求给当前Nacos节点，以统一入口的方式，删除实例信息
             String url = "http://127.0.0.1:" + RunningConfig.getServerPort() + RunningConfig.getContextPath()
                 + UtilsAndCommons.NACOS_NAMING_CONTEXT + "/instance?" + request.toUrl();
 
-            // delete instance asynchronously:
+            // 异步移除实例
             HttpClient.asyncHttpDelete(url, null, null, new AsyncCompletionHandler() {
                 @Override
                 public Object onCompleted(Response response) throws Exception {

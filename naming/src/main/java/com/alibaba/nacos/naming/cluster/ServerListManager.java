@@ -33,8 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import static com.alibaba.nacos.core.utils.SystemUtils.*;
 
 /**
- * The manager to globally refresh and operate server list.
- *
+ * 全局刷新和操作服务集群列表的管理器
+ * Nacos服务节点列表变化来自于conf/cluster.conf文件
  * @author nkorange
  * @since 1.0.0
  */
@@ -66,21 +66,32 @@ public class ServerListManager {
 
     private Synchronizer synchronizer = new ServerStatusSynchronizer();
 
+    /**
+     * 添加服务变更事件listener
+     * @param listener 需要关注服务变更事件的listener
+     */
     public void listen(ServerChangeListener listener) {
         listeners.add(listener);
     }
 
     @PostConstruct
     public void init() {
+        // 刷新服务列表任务
         GlobalExecutor.registerServerListUpdater(new ServerListUpdater());
+        // 服务状态更新任务
         GlobalExecutor.registerServerStatusReporter(new ServerStatusReporter(), 2000);
     }
 
+    /**
+     * 刷新Nacos的服务节点列表
+     * @return 刷新后的Nacos服务节点列表
+     */
     private List<Server> refreshServerList() {
 
         List<Server> result = new ArrayList<>();
-
+        // 如果是单机模式
         if (STANDALONE_MODE) {
+            // 直接创建一个本地IP和port作为服务，并返回
             Server server = new Server();
             server.setIp(NetUtils.getLocalAddress());
             server.setServePort(RunningConfig.getServerPort());
@@ -90,6 +101,7 @@ public class ServerListManager {
 
         List<String> serverList = new ArrayList<>();
         try {
+            // 读取Nacos集群配置
             serverList = readClusterConf();
         } catch (Exception e) {
             Loggers.SRV_LOG.warn("failed to get config: " + CLUSTER_CONF_FILE_PATH, e);
@@ -99,7 +111,7 @@ public class ServerListManager {
             Loggers.SRV_LOG.debug("SERVER-LIST from cluster.conf: {}", result);
         }
 
-        //use system env
+        // 使用系统环境
         if (CollectionUtils.isEmpty(serverList)) {
             serverList = SystemUtils.getIPsBySystemEnv(UtilsAndCommons.SELF_SERVICE_CLUSTER_ENV);
             if (Loggers.SRV_LOG.isDebugEnabled()) {
@@ -110,7 +122,7 @@ public class ServerListManager {
         if (CollectionUtils.isNotEmpty(serverList)) {
 
             for (int i = 0; i < serverList.size(); i++) {
-
+                // 读取ip，port，写入到Server对象中
                 String ip;
                 int port;
                 String server = serverList.get(i);
@@ -155,7 +167,9 @@ public class ServerListManager {
             @Override
             public void run() {
                 for (ServerChangeListener listener : listeners) {
+                    // 触发服务节点变更的回调任务
                     listener.onChangeServerList(servers);
+                    // 触发健康服务节点变更的回调任务
                     listener.onChangeHealthyServerList(healthyServers);
                 }
             }
@@ -286,6 +300,7 @@ public class ServerListManager {
         @Override
         public void run() {
             try {
+                // 刷新服务列表
                 List<Server> refreshedServers = refreshServerList();
                 List<Server> oldServers = servers;
 
@@ -320,7 +335,9 @@ public class ServerListManager {
         }
     }
 
-
+    /**
+     *
+     */
     private class ServerStatusReporter implements Runnable {
 
         @Override
@@ -373,6 +390,9 @@ public class ServerListManager {
         }
     }
 
+    /**
+     * 检查心跳
+     */
     private void checkDistroHeartbeat() {
 
         Loggers.SRV_LOG.debug("check distro heartbeat.");
@@ -382,26 +402,29 @@ public class ServerListManager {
             return;
         }
 
+        // 通过心跳检查的Nacos服务列表
         List<Server> newHealthyList = new ArrayList<>(servers.size());
         long now = System.currentTimeMillis();
         for (Server s: servers) {
+            // 获取上一次心跳时间
             Long lastBeat = distroBeats.get(s.getKey());
             if (null == lastBeat) {
                 continue;
             }
+            // 计算当前Nacos节点是否超出心跳检测时间
             s.setAlive(now - lastBeat < switchDomain.getDistroServerExpiredMillis());
         }
 
-        //local site servers
+        // 本地站点服务节点
         List<String> allLocalSiteSrvs = new ArrayList<>();
         for (Server server : servers) {
-
+            // 如果没有端口，则跳过当前Nacos服务节点
             if (server.getKey().endsWith(":0")) {
                 continue;
             }
-
+            // 设置Nacos节点额外权重
             server.setAdWeight(switchDomain.getAdWeight(server.getKey()) == null ? 0 : switchDomain.getAdWeight(server.getKey()));
-
+            // 计算当前的服务权重
             for (int i = 0; i < server.getWeight() + server.getAdWeight(); i++) {
 
                 if (!allLocalSiteSrvs.contains(server.getKey())) {
@@ -413,36 +436,39 @@ public class ServerListManager {
                 }
             }
         }
-
+        // 对健康Nacos服务节点进行排序
         Collections.sort(newHealthyList);
         float curRatio = (float) newHealthyList.size() / allLocalSiteSrvs.size();
-
+        // 如果开启了自动健康检查，并且服务节点/service数量比率超过了设定的阈值，并且健康检查时间间隔超过了稳定的时间间隔
         if (autoDisabledHealthCheck
             && curRatio > switchDomain.getDistroThreshold()
             && System.currentTimeMillis() - lastHealthServerMillis > STABLE_PERIOD) {
             Loggers.SRV_LOG.info("[NACOS-DISTRO] distro threshold restored and " +
                 "stable now, enable health check. current ratio: {}", curRatio);
-
+            // 则需要开启健康检查
             switchDomain.setHealthCheckEnabled(true);
 
-            // we must set this variable, otherwise it will conflict with user's action
+            // 关闭自动关闭健康检查
+            // 我们必须设置此变量，否则会和开发者的操作冲突
             autoDisabledHealthCheck = false;
         }
-
+        // 如果当前通过心跳检查的Nacos节点集群≠新通过心跳检查的Nacos节点集群
         if (!CollectionUtils.isEqualCollection(healthyServers, newHealthyList)) {
-            // for every change disable healthy check for some while
+            // Nacos健康检查节点发生了变化
             Loggers.SRV_LOG.info("[NACOS-DISTRO] healthy server list changed, old: {}, new: {}",
                 healthyServers, newHealthyList);
+            // 如果开启了健康检查，以及自动健康检查功能
             if (switchDomain.isHealthCheckEnabled() && switchDomain.isAutoChangeHealthCheckEnabled()) {
                 Loggers.SRV_LOG.info("[NACOS-DISTRO] disable health check for {} ms from now on.", STABLE_PERIOD);
-
+                // 在未来的稳定60s时间段内，停止健康检查
                 switchDomain.setHealthCheckEnabled(false);
                 autoDisabledHealthCheck = true;
-
+                // 设置上一次健康检查的时间
                 lastHealthServerMillis = System.currentTimeMillis();
             }
-
+            // 更新通过健康检查的Nacos节点列表
             healthyServers = newHealthyList;
+            // 服务节点发生变更，触发监听服务节点变更事件的回调任务
             notifyListeners();
         }
     }

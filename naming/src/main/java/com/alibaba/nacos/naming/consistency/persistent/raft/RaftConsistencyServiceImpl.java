@@ -28,8 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
- * Use simplified Raft protocol to maintain the consistency status of Nacos cluster.
- *
+ * 使用简化的Raft协议来保证Nacos集群的一致性
  * @author nkorange
  * @since 1.0.0
  */

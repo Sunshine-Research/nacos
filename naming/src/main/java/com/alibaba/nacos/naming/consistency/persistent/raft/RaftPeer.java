@@ -23,16 +23,27 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
+ * 单个Raft节点
  * @author nacos
  */
 public class RaftPeer {
-
+    /**
+     * Raft节点ip地址
+     */
     public String ip;
-
+    /**
+     * Raft节点选举投票对象
+     */
     public String voteFor;
-
+    /**
+     * 当前Raft节点所处于选举时段
+     */
     public AtomicLong term = new AtomicLong(0L);
 
+    /**
+     * 随机生成数，区间[0, 15000)，单位ms
+     *
+     */
     public volatile long leaderDueMs = RandomUtils.nextLong(0, GlobalExecutor.LEADER_TIMEOUT_MS);
 
     public volatile long heartbeatDueMs = RandomUtils.nextLong(0, GlobalExecutor.HEARTBEAT_INTERVAL_MS);
@@ -49,15 +60,15 @@ public class RaftPeer {
 
     public enum State {
         /**
-         * Leader of the cluster, only one leader stands in a cluster
+         * 集群leader节点，一个集群仅有一个leader
          */
         LEADER,
         /**
-         * Follower of the cluster, report to and copy from leader
+         * 集群follower节点，向leader节点汇报，并从leader节点同步
          */
         FOLLOWER,
         /**
-         * Candidate leader to be elected
+         * 候选leader节点，选举时才会出现的状态
          */
         CANDIDATE
     }

@@ -47,8 +47,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Methods for Raft consistency protocol. These methods should only be invoked by Nacos server itself.
- *
+ * Raft一致性协议方法
+ * 所有Raft协议HTTP通信的接口实现
+ * 应该仅由Nacos服务端调用
  * @author nkorange
  * @since 1.0.0
  */
@@ -66,15 +67,29 @@ public class RaftController {
     @Autowired
     private RaftCore raftCore;
 
+    /**
+     * 选举投票请求
+     * @param request  请求对象
+     * @param response 响应对象
+     * @return 投票响应结果
+     * @throws Exception
+     */
     @PostMapping("/vote")
     public JSONObject vote(HttpServletRequest request, HttpServletResponse response) throws Exception {
-
+        // 调用Raft核心处理接收到的选票请求
         RaftPeer peer = raftCore.receivedVote(
             JSON.parseObject(WebUtils.required(request, "vote"), RaftPeer.class));
-
+        // 不论当前节点是否同意发起的选举请求，都会返回当前节点的信息，但是voteFor，也就是投票的节点是不同的
         return JSON.parseObject(JSON.toJSONString(peer));
     }
 
+    /**
+     * 收到leader节点发来的心跳请求
+     * @param request  请求对象
+     * @param response 响应对象
+     * @return 当前节点信息
+     * @throws Exception
+     */
     @PostMapping("/beat")
     public JSONObject beat(HttpServletRequest request, HttpServletResponse response) throws Exception {
 
@@ -84,7 +99,7 @@ public class RaftController {
 
         JSONObject json = JSON.parseObject(value);
         JSONObject beat = JSON.parseObject(json.getString("beat"));
-
+        // 使用Raft核心处理收到的心跳响应
         RaftPeer peer = raftCore.receivedBeat(beat);
 
         return JSON.parseObject(JSON.toJSONString(peer));

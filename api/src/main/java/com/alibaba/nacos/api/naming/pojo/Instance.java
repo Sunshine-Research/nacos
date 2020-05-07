@@ -26,61 +26,59 @@ import java.util.Map;
 import static com.alibaba.nacos.api.common.Constants.NUMBER_PATTERN;
 
 /**
- * Instance
- *
+ * 服务实例
  * @author nkorange
  */
 public class Instance {
 
     /**
-     * unique id of this instance.
+     * 实例的唯一ID
      */
     private String instanceId;
 
     /**
-     * instance ip
+     * 实例真实ip
      */
     private String ip;
 
     /**
-     * instance port
+     * 实例的端口
      */
     private int port;
 
     /**
-     * instance weight
+     * 实例的权重
      */
     private double weight = 1.0D;
 
     /**
-     * instance health status
+     * 实例健康状态
      */
     private boolean healthy = true;
 
     /**
-     * If instance is enabled to accept request
+     * 实例当前是否允许接收请求
      */
     private boolean enabled = true;
 
     /**
-     * If instance is ephemeral
-     *
+     * 实例状态是否是瞬息的
      * @since 1.0.0
      */
     private boolean ephemeral = true;
 
     /**
-     * cluster information of instance
+     * 实例的集群信息
      */
     private String clusterName;
 
     /**
-     * Service information of instance
+     * 实例的服务名称
      */
     private String serviceName;
 
     /**
-     * user extended attributes
+     * 实例的额外属性
      */
     private Map<String, String> metadata = new HashMap<String, String>();
 

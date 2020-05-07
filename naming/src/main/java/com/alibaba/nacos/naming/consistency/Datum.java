@@ -20,6 +20,7 @@ import com.alibaba.nacos.naming.pojo.Record;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
+ * 数据类
  * @author nacos
  */
 public class Datum<T extends Record> {

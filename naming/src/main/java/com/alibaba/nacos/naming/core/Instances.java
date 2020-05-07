@@ -27,8 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Package of instance list
- *
+ * 可持久化的实例列表
  * @author nkorange
  * @since 1.0.0
  */

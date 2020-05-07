@@ -23,6 +23,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
+ *
  * @author nacos
  */
 @Component
@@ -59,9 +60,13 @@ public class SwitchDomain implements Record, Cloneable {
     private MysqlHealthParams mysqlHealthParams = new MysqlHealthParams();
 
     private List<String> incrementalList = new ArrayList<>();
-
+    /**
+     * server状态调度器
+     */
     private long serverStatusSynchronizationPeriodMillis = TimeUnit.SECONDS.toMillis(2);
-
+    /**
+     * service状况调度器
+     */
     private long serviceStatusSynchronizationPeriodMillis = TimeUnit.SECONDS.toMillis(5);
 
     private boolean disableAddIP = false;
@@ -73,7 +78,7 @@ public class SwitchDomain implements Record, Cloneable {
     private Map<String, Integer> limitedUrlMap = new HashMap<>();
 
     /**
-     * The server is regarded as expired if its two reporting interval is lagger than this variable.
+     * 两次心跳时间间隔大于此成员变量，则server会被视为失效
      */
     private long distroServerExpiredMillis = TimeUnit.SECONDS.toMillis(10);
 
@@ -88,7 +93,9 @@ public class SwitchDomain implements Record, Cloneable {
     private boolean enableAuthentication = false;
 
     private String overriddenServerStatus = null;
-
+    /**
+     * 默认实例为临时节点，即根据上报状态进行增删
+     */
     private boolean defaultInstanceEphemeral = true;
 
     public boolean isEnableAuthentication() {

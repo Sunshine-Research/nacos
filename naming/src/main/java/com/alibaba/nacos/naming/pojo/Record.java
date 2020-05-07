@@ -16,8 +16,7 @@
 package com.alibaba.nacos.naming.pojo;
 
 /**
- * Record to transfer and store in Nacos cluster
- *
+ * 用于记录，传递和存储在Nacos集群中的类
  * @author nkorange
  * @since 1.0.0
  */

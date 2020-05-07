@@ -29,8 +29,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Thread to update ephemeral instance triggered by client beat
- *
+ * 客户端发起的心跳请求，用于处理临时节点的心跳请求任务
  * @author nkorange
  */
 public class ClientBeatProcessor implements Runnable {
@@ -65,19 +64,23 @@ public class ClientBeatProcessor implements Runnable {
         if (Loggers.EVT_LOG.isDebugEnabled()) {
             Loggers.EVT_LOG.debug("[CLIENT-BEAT] processing beat: {}", rsInfo.toString());
         }
-
+        // 获取ip，port，clusterName
         String ip = rsInfo.getIp();
         String clusterName = rsInfo.getCluster();
         int port = rsInfo.getPort();
         Cluster cluster = service.getClusterMap().get(clusterName);
+        // 获取指定service，指定cluster下的所有临时节点
         List<Instance> instances = cluster.allIPs(true);
-
+        // 遍历所有的临时节点
         for (Instance instance : instances) {
+            // 如果找到了心跳上报的客户端节点
             if (instance.getIp().equals(ip) && instance.getPort() == port) {
                 if (Loggers.EVT_LOG.isDebugEnabled()) {
                     Loggers.EVT_LOG.debug("[CLIENT-BEAT] refresh beat: {}", rsInfo.toString());
                 }
+                // 设置实例的最新心跳信息
                 instance.setLastBeat(System.currentTimeMillis());
+                // 如果节点没有被标记，并且处于非健康状态，则更新节点状态为健康状态
                 if (!instance.isMarked()) {
                     if (!instance.isHealthy()) {
                         instance.setHealthy(true);

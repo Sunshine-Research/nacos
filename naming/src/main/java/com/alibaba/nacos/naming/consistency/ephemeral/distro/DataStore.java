@@ -26,8 +26,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Store of data
- *
+ * 数据存储
  * @author nkorange
  * @since 1.0.0
  */

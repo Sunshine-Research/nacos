@@ -16,15 +16,16 @@
 package com.alibaba.nacos.naming.consistency;
 
 /**
+ * Service动作类型
  * @author nkorange
  */
 public enum ApplyAction {
     /**
-     * Data changed
+     * 数据变更
      */
     CHANGE,
     /**
-     * Data deleted
+     * 数据删除
      */
     DELETE
 }

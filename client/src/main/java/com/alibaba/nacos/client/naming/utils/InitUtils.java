@@ -105,33 +105,39 @@ public class InitUtils {
         });
     }
 
+    /**
+     * 初始化后端节点
+     * @param properties 属性配置
+     * @return
+     */
     public static String initEndpoint(final Properties properties) {
         if (properties == null) {
 
             return "";
         }
-        // Whether to enable domain name resolution rules
+        // 是否启用域名解析规则
         String isUseEndpointRuleParsing =
             properties.getProperty(PropertyKeyConst.IS_USE_ENDPOINT_PARSING_RULE,
                 System.getProperty(SystemPropertyKeyConst.IS_USE_ENDPOINT_PARSING_RULE,
                     String.valueOf(ParamUtil.USE_ENDPOINT_PARSING_RULE_DEFAULT_VALUE)));
-
+        // 一般情况下是启用
         boolean isUseEndpointParsingRule = Boolean.parseBoolean(isUseEndpointRuleParsing);
         String endpointUrl;
         if (isUseEndpointParsingRule) {
-            // Get the set domain name information
+            // 根据规则获取设置的域名解析地址
             endpointUrl = ParamUtil.parsingEndpointRule(properties.getProperty(PropertyKeyConst.ENDPOINT));
             if (StringUtils.isBlank(endpointUrl)) {
                 return "";
             }
         } else {
+            // 获取设置的域名解析地址
             endpointUrl = properties.getProperty(PropertyKeyConst.ENDPOINT);
         }
 
         if (StringUtils.isBlank(endpointUrl)) {
             return "";
         }
-
+        // 获取Nacos服务节点的端口号
         String endpointPort = TemplateUtils.stringEmptyAndThenExecute(System.getenv(PropertyKeyConst.SystemEnv.ALIBABA_ALIWARE_ENDPOINT_PORT), new Callable<String>() {
             @Override
             public String call() {
@@ -139,14 +145,14 @@ public class InitUtils {
                 return properties.getProperty(PropertyKeyConst.ENDPOINT_PORT);
             }
         });
-
+        // 默认为8080
         endpointPort = TemplateUtils.stringEmptyAndThenExecute(endpointPort, new Callable<String>() {
             @Override
             public String call() {
                 return "8080";
             }
         });
-
+        // 组装Nacos服务节点地址
         return endpointUrl + ":" + endpointPort;
     }
 

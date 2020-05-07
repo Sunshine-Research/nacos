@@ -46,13 +46,14 @@ public class HealthCheckProcessorDelegate implements HealthCheckProcessor {
 
     @Override
     public void process(HealthCheckTask task) {
-
+        // 获取当前集群的健康检查类型
         String type = task.getCluster().getHealthChecker().getType();
         HealthCheckProcessor processor = healthCheckProcessorMap.get(type);
         if(processor == null){
             processor = healthCheckProcessorMap.get(NoneHealthCheckProcessor.TYPE);
         }
-
+        // 使用指定类型的健康检查处理器，进行健康检查
+        // cluster的健康检查优先使用TCPSuperSenseProcessor进行处理
         processor.process(task);
     }
 

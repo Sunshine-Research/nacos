@@ -24,10 +24,13 @@ import com.alibaba.nacos.naming.misc.SwitchDomain;
 import org.apache.commons.lang3.RandomUtils;
 
 /**
+ * 健康检查任务
  * @author nacos
  */
 public class HealthCheckTask implements Runnable {
-
+    /**
+     * 健康检查任务关联的集群
+     */
     private Cluster cluster;
 
     private long checkRTNormalized = -1;
@@ -52,14 +55,21 @@ public class HealthCheckTask implements Runnable {
 
     public HealthCheckTask(Cluster cluster) {
         this.cluster = cluster;
+        // 初始化server变更listener
         distroMapper = SpringContext.getAppContext().getBean(DistroMapper.class);
+        // 获取全局的SwitchDomain
         switchDomain = SpringContext.getAppContext().getBean(SwitchDomain.class);
+        // 健康检查代理类，用于发起健康检查
         healthCheckProcessor = SpringContext.getAppContext().getBean(HealthCheckProcessorDelegate.class);
+        // 初始化健康检查的时间间隔
         initCheckRT();
     }
 
+    /**
+     * 初始化检查频率
+     */
     public void initCheckRT() {
-        // first check time delay
+        // 检查的延迟时间，2s+(0, 5)之间的随机数
         checkRTNormalized = 2000 + RandomUtils.nextInt(0, RandomUtils.nextInt(0, switchDomain.getTcpHealthParams().getMax()));
         checkRTBest = Long.MAX_VALUE;
         checkRTWorst = 0L;
@@ -69,8 +79,10 @@ public class HealthCheckTask implements Runnable {
     public void run() {
 
         try {
+            // 如果当前的distro负责本数据块的任务，并且开启了当前service支持健康检查
             if (distroMapper.responsible(cluster.getService().getName()) &&
                 switchDomain.isHealthCheckEnabled(cluster.getService().getName())) {
+                // 调度执行健康检查任务
                 healthCheckProcessor.process(this);
                 if (Loggers.EVT_LOG.isDebugEnabled()) {
                     Loggers.EVT_LOG.debug("[HEALTH-CHECK] schedule health check task: {}", cluster.getService().getName());
@@ -80,14 +92,16 @@ public class HealthCheckTask implements Runnable {
             Loggers.SRV_LOG.error("[HEALTH-CHECK] error while process health check for {}:{}",
                 cluster.getService().getName(), cluster.getName(), e);
         } finally {
+            // 如果任务没有取消
             if (!cancelled) {
+                // 调度下一次健康检查任务
                 HealthCheckReactor.scheduleCheck(this);
 
-                // worst == 0 means never checked
+                // worst == 0意味着没有进行过健康检查
                 if (this.getCheckRTWorst() > 0
                     && switchDomain.isHealthCheckEnabled(cluster.getService().getName())
                     && distroMapper.responsible(cluster.getService().getName())) {
-                    // TLog doesn't support float so we must convert it into long
+                    // 计算两次健康检查时间间隔
                     long diff = ((this.getCheckRTLast() - this.getCheckRTLastLast()) * 10000)
                         / this.getCheckRTLastLast();
 

@@ -33,12 +33,17 @@ import java.util.concurrent.*;
 import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
 
 /**
+ * service心跳响应管理器
  * @author harold
  */
 public class BeatReactor {
-
+    /**
+     * 心跳调度线程池
+     */
     private ScheduledExecutorService executorService;
-
+    /**
+     * 命名服务，负责和Nacos服务节点进行联通
+     */
     private NamingProxy serverProxy;
 
     private boolean lightBeatEnabled = false;
@@ -46,11 +51,14 @@ public class BeatReactor {
     public final Map<String, BeatInfo> dom2Beat = new ConcurrentHashMap<String, BeatInfo>();
 
     public BeatReactor(NamingProxy serverProxy) {
+        // 使用设置的线程数量，初始化心跳任务调度器
         this(serverProxy, UtilAndComs.DEFAULT_CLIENT_BEAT_THREAD_COUNT);
     }
 
     public BeatReactor(NamingProxy serverProxy, int threadCount) {
+        // 用于发起心跳请求的命名代理
         this.serverProxy = serverProxy;
+        // 初始化调度器
         executorService = new ScheduledThreadPoolExecutor(threadCount, new ThreadFactory() {
             @Override
             public Thread newThread(Runnable r) {
@@ -105,13 +113,16 @@ public class BeatReactor {
             }
             long nextTime = beatInfo.getPeriod();
             try {
+                // 使用NamingProxy发送心跳请求
                 JSONObject result = serverProxy.sendBeat(beatInfo, BeatReactor.this.lightBeatEnabled);
+                // Nacos服务端会返回下一次心跳时间间隔
                 long interval = result.getIntValue("clientBeatInterval");
                 boolean lightBeatEnabled = false;
                 if (result.containsKey(CommonParams.LIGHT_BEAT_ENABLED)) {
                     lightBeatEnabled = result.getBooleanValue(CommonParams.LIGHT_BEAT_ENABLED);
                 }
                 BeatReactor.this.lightBeatEnabled = lightBeatEnabled;
+                // 设置下一次进行心跳的时间
                 if (interval > 0) {
                     nextTime = interval;
                 }
@@ -119,6 +130,7 @@ public class BeatReactor {
                 if (result.containsKey(CommonParams.CODE)) {
                     code = result.getIntValue(CommonParams.CODE);
                 }
+                // 如果返回没有找到对应的资源，则会重新进行注册
                 if (code == NamingResponseCode.RESOURCE_NOT_FOUND) {
                     Instance instance = new Instance();
                     instance.setPort(beatInfo.getPort());
@@ -140,6 +152,7 @@ public class BeatReactor {
                     JSON.toJSONString(beatInfo), ne.getErrCode(), ne.getErrMsg());
 
             }
+            // 调度下一次心跳任务
             executorService.schedule(new BeatTask(beatInfo), nextTime, TimeUnit.MILLISECONDS);
         }
     }

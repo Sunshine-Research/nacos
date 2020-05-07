@@ -19,32 +19,35 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.nacos.naming.misc.UtilsAndCommons;
 
 /**
- * Member node of Nacos cluster
- *
+ * Nacos集群的成员
  * @author nkorange
  * @since 1.0.0
  */
 public class Server implements Comparable<Server> {
 
     /**
-     * IP of member
+     * Nacos节点ip
      */
     private String ip;
-
     /**
-     * serving port of member.
+     * Nacos节点port
      */
     private int servePort;
-
-    private String site = UtilsAndCommons.UNKNOWN_SITE;
-
-    private int weight = 1;
-
     /**
-     * additional weight, used to adjust manually
+     *
+     */
+    private String site = UtilsAndCommons.UNKNOWN_SITE;
+    /**
+     * Nacos节点权重
+     */
+    private int weight = 1;
+    /**
+     * Nacos节点额外权重，用于手动调整
      */
     private int adWeight;
-
+    /**
+     * Nacos节点是否存活
+     */
     private boolean alive = false;
 
     private long lastRefTime = 0L;

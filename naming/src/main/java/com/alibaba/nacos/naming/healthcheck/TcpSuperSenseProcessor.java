@@ -36,8 +36,7 @@ import java.util.concurrent.*;
 import static com.alibaba.nacos.naming.misc.Loggers.SRV_LOG;
 
 /**
- * TCP health check processor
- *
+ * TCP健康检查处理器
  * @author nacos
  */
 @Component
@@ -54,17 +53,19 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
     public static final int CONNECT_TIMEOUT_MS = 500;
 
     private Map<String, BeatKey> keyMap = new ConcurrentHashMap<>();
-
+    /**
+     * 任务队列
+     */
     private BlockingQueue<Beat> taskQueue = new LinkedBlockingQueue<Beat>();
 
     /**
-     * this value has been carefully tuned, do not modify unless you're confident
+     * 此值已经经过仔细的调整，如果你有足够的自信，可以进行更改
      */
     private static final int NIO_THREAD_COUNT = Runtime.getRuntime().availableProcessors() <= 1 ?
         1 : Runtime.getRuntime().availableProcessors() / 2;
 
     /**
-     * because some hosts doesn't support keep-alive connections, disabled temporarily
+     * 因为一些节点不支持keep-alive连接，临时关闭
      */
     private static final long TCP_KEEP_ALIVE_MILLIS = 0;
 
@@ -107,12 +108,13 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
 
     @Override
     public void process(HealthCheckTask task) {
+        // 获取当前cluster下所有持久实例
         List<Instance> ips = task.getCluster().allIPs(false);
 
         if (CollectionUtils.isEmpty(ips)) {
             return;
         }
-
+        // 遍历所有持久实例
         for (Instance ip : ips) {
 
             if (ip.isMarked()) {
@@ -121,7 +123,7 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
                 }
                 continue;
             }
-
+            // 已经标记为正在检查，则不进行处理
             if (!ip.markChecking()) {
                 SRV_LOG.warn("tcp check started before last one finished, service: "
                     + task.getCluster().getService().getName() + ":"
@@ -132,9 +134,10 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
                 healthCheckCommon.reEvaluateCheckRT(task.getCheckRTNormalized() * 2, task, switchDomain.getTcpHealthParams());
                 continue;
             }
-
+            // 构建心跳任务，并添加到心跳队列中
             Beat beat = new Beat(ip, task);
             taskQueue.add(beat);
+            // 递增TCP健康检查计数器
             MetricsMonitor.getTcpHealthCheckMonitor().incrementAndGet();
         }
     }
@@ -142,15 +145,17 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
     private void processTask() throws Exception {
         Collection<Callable<Void>> tasks = new LinkedList<>();
         do {
+            // 在任务队列中存在任务，并且任务数量小于指定计算个数的前提下进行自旋
             Beat beat = taskQueue.poll(CONNECT_TIMEOUT_MS / 2, TimeUnit.MILLISECONDS);
             if (beat == null) {
                 return;
             }
-
+            // 向本地缓存中添加取出的任务
             tasks.add(new TaskProcessor(beat));
         } while (taskQueue.size() > 0 && tasks.size() < NIO_THREAD_COUNT * 64);
-
+        // 使用NIO线程池处理取出的任务
         for (Future<?> f : NIO_EXECUTOR.invokeAll(tasks)) {
+            // 这么做可以抛出异常
             f.get();
         }
     }
@@ -159,18 +164,19 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
     public void run() {
         while (true) {
             try {
+                // 处理任务队列中的任务
                 processTask();
 
                 int readyCount = selector.selectNow();
                 if (readyCount <= 0) {
                     continue;
                 }
-
+                // 遍历NIO模型下的心跳请求
                 Iterator<SelectionKey> iter = selector.selectedKeys().iterator();
                 while (iter.hasNext()) {
                     SelectionKey key = iter.next();
                     iter.remove();
-
+                    // 添加到心跳请求到线程池中执行
                     NIO_EXECUTOR.execute(new PostProcessor(key));
                 }
             } catch (Throwable e) {
@@ -179,6 +185,9 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
         }
     }
 
+    /**
+     * 实例发送的心跳请求
+     */
     public class PostProcessor implements Runnable {
         SelectionKey key;
 
@@ -188,40 +197,42 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
 
         @Override
         public void run() {
+            // 获取心跳信息
             Beat beat = (Beat) key.attachment();
+            // 获取写入的channel
             SocketChannel channel = (SocketChannel) key.channel();
             try {
                 if (!beat.isHealthy()) {
-                    //invalid beat means this server is no longer responsible for the current service
+                    // 非法的心跳意味着server节点不再负责此service
                     key.cancel();
                     key.channel().close();
-
+                    // 仅结束健康检查状态，不更新实例状态，等待同步其他Nacos节点数据
                     beat.finishCheck();
                     return;
                 }
-
+                // 结束channel，并设置
                 if (key.isValid() && key.isConnectable()) {
-                    //connected
+                    // 结束心跳请求
                     channel.finishConnect();
                     beat.finishCheck(true, false, System.currentTimeMillis() - beat.getTask().getStartTime(), "tcp:ok+");
                 }
 
                 if (key.isValid() && key.isReadable()) {
-                    //disconnected
+                    // 断开连接
                     ByteBuffer buffer = ByteBuffer.allocate(128);
                     if (channel.read(buffer) == -1) {
                         key.cancel();
                         key.channel().close();
                     } else {
-                        // not terminate request, ignore
+                        // 不中断请求，进行忽略
                     }
                 }
             } catch (ConnectException e) {
-                // unable to connect, possibly port not opened
+                // 无法连接，可能端口还未开启
                 beat.finishCheck(false, true, switchDomain.getTcpHealthParams().getMax(), "tcp:unable2connect:" + e.getMessage());
             } catch (Exception e) {
                 beat.finishCheck(false, false, switchDomain.getTcpHealthParams().getMax(), "tcp:error:" + e.getMessage());
-
+                // 其他情况，直接关闭channel
                 try {
                     key.cancel();
                     key.channel().close();
@@ -232,8 +243,9 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
     }
 
     private class Beat {
+        // 心跳实例
         Instance ip;
-
+        // 心跳检查任务
         HealthCheckTask task;
 
         long startTime = System.currentTimeMillis();
@@ -264,27 +276,38 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
         }
 
         /**
-         * finish check only, no ip state will be changed
+         * 仅结束实例健康状态检查，不设置实例的状态
          */
         public void finishCheck() {
             ip.setBeingChecked(false);
         }
 
+        /**
+         * 结束实例健康状态检查
+         * @param success
+         * @param now
+         * @param rt
+         * @param msg
+         */
         public void finishCheck(boolean success, boolean now, long rt, String msg) {
+            // 设置当前实例本次健康检查频率
             ip.setCheckRT(System.currentTimeMillis() - startTime);
 
             if (success) {
+                // 健康检查通过
                 healthCheckCommon.checkOK(ip, task, msg);
             } else {
                 if (now) {
+                    // 立即将实例设置为健康检查失败
                     healthCheckCommon.checkFailNow(ip, task, msg);
                 } else {
+                    // 健康检查失败
                     healthCheckCommon.checkFail(ip, task, msg);
                 }
-
+                // 从当前任务缓存中移除当前任务
                 keyMap.remove(task.toString());
             }
-
+            // 重新计算健康检查频率
             healthCheckCommon.reEvaluateCheckRT(rt, task, switchDomain.getTcpHealthParams());
         }
 

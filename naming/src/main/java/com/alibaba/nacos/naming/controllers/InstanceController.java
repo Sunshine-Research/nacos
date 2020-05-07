@@ -89,15 +89,21 @@ public class InstanceController {
         }
     };
 
-
+    /**
+     * Nacos客户端服务注册
+     * @param request 服务注册请求
+     * @return 服务注册响应
+     * @throws Exception 出现异常
+     */
     @CanDistro
     @PostMapping
     @Secured(parser = NamingResourceParser.class, action = ActionTypes.WRITE)
     public String register(HttpServletRequest request) throws Exception {
-
+        // 从请求中获取注册的服务名称
         String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
+        // 从请求中获取注册的namespaceId
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
-
+        // 进行服务注册
         serviceManager.registerInstance(namespaceId, serviceName, parseInstance(request));
         return "ok";
     }
@@ -255,14 +261,21 @@ public class InstanceController {
         throw new NacosException(NacosException.NOT_FOUND, "no matched ip found!");
     }
 
+    /**
+     * service实例的心跳请求
+     * @param request 心跳请求
+     * @return 心跳请求结果
+     * @throws Exception 出现异常
+     */
     @CanDistro
     @PutMapping("/beat")
     @Secured(parser = NamingResourceParser.class, action = ActionTypes.WRITE)
     public JSONObject beat(HttpServletRequest request) throws Exception {
 
         JSONObject result = new JSONObject();
-
+        // 先将下一次心跳请求的时间间隔写入到响应中
         result.put("clientBeatInterval", switchDomain.getClientBeatInterval());
+        // 获取心跳请求实例的serviceName，namespaceId和集群ID
         String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID,
             Constants.DEFAULT_NAMESPACE_ID);
@@ -270,18 +283,21 @@ public class InstanceController {
             UtilsAndCommons.DEFAULT_CLUSTER_NAME);
         String ip = WebUtils.optional(request, "ip", StringUtils.EMPTY);
         int port = Integer.parseInt(WebUtils.optional(request, "port", "0"));
+        // 获取service实例注册信息
         String beat = WebUtils.optional(request, "beat", StringUtils.EMPTY);
 
         RsInfo clientBeat = null;
         if (StringUtils.isNotBlank(beat)) {
+            // 解析为RsInfo对象
             clientBeat = JSON.parseObject(beat, RsInfo.class);
         }
 
         if (clientBeat != null) {
             if (StringUtils.isNotBlank(clientBeat.getCluster())) {
+                // 更新集群名称
                 clusterName = clientBeat.getCluster();
             } else {
-                // fix #2533
+                // 解决#2533问题，避免集群名称为null
                 clientBeat.setCluster(clusterName);
             }
             ip = clientBeat.getIp();
@@ -291,9 +307,9 @@ public class InstanceController {
         if (Loggers.SRV_LOG.isDebugEnabled()) {
             Loggers.SRV_LOG.debug("[CLIENT-BEAT] full arguments: beat: {}, serviceName: {}", clientBeat, serviceName);
         }
-
+        // 从service缓存中获取指定实例信息
         Instance instance = serviceManager.getInstance(namespaceId, serviceName, clusterName, ip, port);
-
+        // 如果实例信息为null，则可能数据还没有更新，会注册实例
         if (instance == null) {
             if (clientBeat == null) {
                 result.put(CommonParams.CODE, NamingResponseCode.RESOURCE_NOT_FOUND);
@@ -308,10 +324,10 @@ public class InstanceController {
             instance.setServiceName(serviceName);
             instance.setInstanceId(instance.getInstanceId());
             instance.setEphemeral(clientBeat.isEphemeral());
-
+            // 向Nacos集群中注册实例
             serviceManager.registerInstance(namespaceId, serviceName, instance);
         }
-
+        // 重新获取service
         Service service = serviceManager.getService(namespaceId, serviceName);
 
         if (service == null) {
@@ -324,6 +340,7 @@ public class InstanceController {
             clientBeat.setPort(port);
             clientBeat.setCluster(clusterName);
         }
+        // 使用service来处理心跳请求
         service.processClientBeat(clientBeat);
 
         result.put(CommonParams.CODE, NamingResponseCode.OK);
